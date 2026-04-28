@@ -4,6 +4,9 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// FIX: file này phải đặt ở src/components/Navbar.tsx (không phải src/Navbar.tsx)
+// để layout.tsx import @/components/Navbar hoạt động đúng
+
 export default function Navbar() {
   const [query, setQuery] = useState('');
   const router = useRouter();
@@ -29,7 +32,7 @@ export default function Navbar() {
     }}>
       <Link href="/" style={{ textDecoration: 'none' }}>
         <span style={{ fontSize: '22px', fontWeight: 800, color: '#ff6b35', letterSpacing: '-0.5px' }}>
-          Manga<span style={{ color: '#e8e8f0', fontWeight: 300 }}>Flow</span>
+          HoiUC<span style={{ color: '#e8e8f0', fontWeight: 300 }}>Dex</span>
         </span>
       </Link>
 
