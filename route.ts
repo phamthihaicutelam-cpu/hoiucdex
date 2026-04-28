@@ -1,5 +1,6 @@
-// src/app/api/mangadex/route.ts
+// app/api/mangadex/route.ts
 // Proxy all MangaDex requests server-side to avoid CORS issues
+// Không cần sửa file này — hoạt động đúng rồi
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -8,7 +9,7 @@ const BASE = 'https://api.mangadex.org';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const endpoint = searchParams.get('endpoint') || 'manga';
-  
+
   // Remove our internal 'endpoint' param before forwarding
   searchParams.delete('endpoint');
 
@@ -17,10 +18,10 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(upstreamUrl, {
       headers: {
-        'User-Agent': 'MangaFlow/1.0 (https://github.com/user/mangaflow)',
+        'User-Agent': 'HoiUCDex/1.0',
         'Content-Type': 'application/json',
       },
-      next: { revalidate: 60 }, // Cache 60 seconds
+      next: { revalidate: 60 },
     });
 
     if (!res.ok) {
