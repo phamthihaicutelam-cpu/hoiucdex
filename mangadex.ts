@@ -25,6 +25,18 @@ export interface AuthorRel {
   attributes?: { name: string };
 }
 
+export interface MangaRelationship {
+  id: string;
+  type: string;
+  attributes?: {
+    title?: MangaTitle;
+    name?: string;
+    website?: string;
+    fileName?: string;
+    volume?: string;
+  };
+}
+
 export interface MangaAttributes {
   title: MangaTitle;
   altTitles: MangaTitle[];
@@ -42,7 +54,7 @@ export interface Manga {
   id: string;
   type: 'manga';
   attributes: MangaAttributes;
-  relationships: Array<CoverArt | AuthorRel | { id: string; type: string }>;
+  relationships: Array<CoverArt | AuthorRel | MangaRelationship>;
 }
 
 export interface ChapterAttributes {
@@ -60,7 +72,7 @@ export interface Chapter {
   id: string;
   type: 'chapter';
   attributes: ChapterAttributes;
-  relationships: Array<{ id: string; type: string; attributes?: { name: string; website?: string } }>;
+  relationships: MangaRelationship[];
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -96,8 +108,9 @@ export function getGenres(manga: Manga): string[] {
 }
 
 export function formatTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const diff = Math.max(0, Date.now() - new Date(dateStr).getTime()); // fix: clamp âm
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Vừa xong';
   if (mins < 60) return `${mins} phút trước`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs} giờ trước`;
@@ -109,13 +122,15 @@ export function formatTime(dateStr: string): string {
 // ─── API fetchers ────────────────────────────────────────────────────────────
 
 export async function fetchPopularManga(limit = 18): Promise<Manga[]> {
-  const params = new URLSearchParams({
-    limit: String(limit),
-    'contentRating[]': 'safe',
-    'order[followedCount]': 'desc',
-    'includes[]': 'cover_art',
-    'includes[1]': 'author',
-  });
+  // FIX: dùng append() thay vì key trùng — URLSearchParams ghi đè nếu set key giống nhau
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.append('contentRating[]', 'safe');
+  params.append('contentRating[]', 'suggestive');
+  params.set('order[followedCount]', 'desc');
+  params.append('includes[]', 'cover_art');
+  params.append('includes[]', 'author');
+
   const res = await fetch(`${LOCAL_PROXY}?${params}`);
   if (!res.ok) throw new Error('Failed to fetch popular manga');
   const data = await res.json();
@@ -123,14 +138,16 @@ export async function fetchPopularManga(limit = 18): Promise<Manga[]> {
 }
 
 export async function fetchLatestChapters(limit = 30): Promise<Chapter[]> {
-  const params = new URLSearchParams({
-    limit: String(limit),
-    'translatedLanguage[]': 'vi',
-    'contentRating[]': 'safe',
-    'order[publishAt]': 'desc',
-    'includes[]': 'manga',
-    'includes[1]': 'scanlation_group',
-  });
+  // FIX: append đúng cách, thêm manga vào includes để lấy title
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.append('translatedLanguage[]', 'vi');
+  params.append('contentRating[]', 'safe');
+  params.append('contentRating[]', 'suggestive');
+  params.set('order[publishAt]', 'desc');
+  params.append('includes[]', 'manga');
+  params.append('includes[]', 'scanlation_group');
+
   const res = await fetch(`${LOCAL_PROXY}?endpoint=chapter&${params}`);
   if (!res.ok) throw new Error('Failed to fetch latest chapters');
   const data = await res.json();
@@ -138,11 +155,12 @@ export async function fetchLatestChapters(limit = 30): Promise<Chapter[]> {
 }
 
 export async function fetchMangaDetail(id: string): Promise<Manga> {
-  const params = new URLSearchParams({
-    'includes[]': 'cover_art',
-    'includes[1]': 'author',
-    'includes[2]': 'artist',
-  });
+  // FIX: append đúng cách
+  const params = new URLSearchParams();
+  params.append('includes[]', 'cover_art');
+  params.append('includes[]', 'author');
+  params.append('includes[]', 'artist');
+
   const res = await fetch(`${LOCAL_PROXY}?endpoint=manga/${id}&${params}`);
   if (!res.ok) throw new Error('Failed to fetch manga detail');
   const data = await res.json();
@@ -150,32 +168,38 @@ export async function fetchMangaDetail(id: string): Promise<Manga> {
 }
 
 export async function fetchMangaChapters(mangaId: string, offset = 0): Promise<{ chapters: Chapter[]; total: number }> {
-  const params = new URLSearchParams({
-    'translatedLanguage[]': 'vi',
-    limit: '100',
-    offset: String(offset),
-    'order[chapter]': 'desc',
-    'includes[]': 'scanlation_group',
-  });
+  // FIX: append đúng cách
+  const params = new URLSearchParams();
+  params.append('translatedLanguage[]', 'vi');
+  params.set('limit', '100');
+  params.set('offset', String(offset));
+  params.set('order[chapter]', 'desc');
+  params.append('includes[]', 'scanlation_group');
+
   const res = await fetch(`${LOCAL_PROXY}?endpoint=manga/${mangaId}/feed&${params}`);
   if (!res.ok) throw new Error('Failed to fetch chapters');
   const data = await res.json();
   return { chapters: data.data ?? [], total: data.total ?? 0 };
 }
 
-export async function fetchChapterPages(chapterId: string): Promise<{ baseUrl: string; chapter: { hash: string; data: string[]; dataSaver: string[] } }> {
+export async function fetchChapterPages(chapterId: string): Promise<{
+  baseUrl: string;
+  chapter: { hash: string; data: string[]; dataSaver: string[] };
+}> {
   const res = await fetch(`${LOCAL_PROXY}?endpoint=at-home/server/${chapterId}`);
   if (!res.ok) throw new Error('Failed to fetch chapter pages');
   return res.json();
 }
 
 export async function searchManga(query: string, limit = 20): Promise<Manga[]> {
-  const params = new URLSearchParams({
-    title: query,
-    limit: String(limit),
-    'contentRating[]': 'safe',
-    'includes[]': 'cover_art',
-  });
+  // FIX: append đúng cách
+  const params = new URLSearchParams();
+  params.set('title', query);
+  params.set('limit', String(limit));
+  params.append('contentRating[]', 'safe');
+  params.append('contentRating[]', 'suggestive');
+  params.append('includes[]', 'cover_art');
+
   const res = await fetch(`${LOCAL_PROXY}?${params}`);
   if (!res.ok) throw new Error('Search failed');
   const data = await res.json();
